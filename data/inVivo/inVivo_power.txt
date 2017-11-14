@@ -1,0 +1,16 @@
+FileName	Power(dB)
+inVivo_0.jpg	-26.7
+inVivo_1.jpg	-24.6
+inVivo_2.jpg	-22.2
+inVivo_3.jpg	-20.1
+inVivo_4.jpg	-18.0
+inVivo_5.jpg	-15.9
+inVivo_6.jpg	-14.1
+inVivo_7.jpg	-12.0
+inVivo_8.jpg	-10.5
+inVivo_9.jpg	-8.4
+inVivo_10.jpg	-6.3
+inVivo_11.jpg	-4.2
+inVivo_12.jpg	-2.4
+inVivo_13.jpg	-0.9
+inVivo_14.jpg	0.0

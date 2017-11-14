@@ -1,0 +1,16 @@
+FileName	Power(dB)
+exVivo_0.jpg	-26.7
+exVivo_1.jpg	-24.6
+exVivo_2.jpg	-22.2
+exVivo_3.jpg	-20.1
+exVivo_4.jpg	-18.0
+exVivo_5.jpg	-15.9
+exVivo_6.jpg	-14.1
+exVivo_7.jpg	-12.0
+exVivo_8.jpg	-10.5
+exVivo_9.jpg	-8.4
+exVivo_10.jpg	-6.3
+exVivo_11.jpg	-4.2
+exVivo_12.jpg	-2.4
+exVivo_13.jpg	-0.9
+exVivo_14.jpg	0.0
