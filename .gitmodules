@@ -1,0 +1,3 @@
+[submodule "HDR_Toolbox"]
+	path = HDR_Toolbox
+	url = https://github.com/adegirmenci/HDR_Toolbox
