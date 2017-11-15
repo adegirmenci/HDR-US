@@ -15,7 +15,7 @@ From the root project directory, run the install script:
   
 #### 2.1 MATLAB Toolbox Dependencies
 * Image Processing Toolbox
-* Parallel Computing Toolbox (
+* Parallel Computing Toolbox (optional)
 
 This code was tested using MATLAB 2016b and 2017b.
 
