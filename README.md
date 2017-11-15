@@ -12,17 +12,27 @@ Download the repo to your machine:
 From the root project directory, run the install script:
 
 	installHDRUS
-
   
-#### 2.1 Required MATLAB Toolboxes
+#### 2.1 MATLAB Toolbox Dependencies
 * Image Processing Toolbox
+* Parallel Computing Toolbox (
+
+This code was tested using MATLAB 2016b and 2017b.
 
 #### 2.2 Dependencies
 
 We use F. Banterle's HDR Toolbox (https://github.com/banterle/HDR_Toolbox). The DebevecCRF function is modified to return two extra variables, logE and stack samples.
 
 ### 3 Usage
-Run the MATLAB script HDR-US.m.
+Run the MATLAB script runHDRUS.m:
+
+	runHDRUS
+
+Select the dataset directory from the dialog.
+
+To save results, set the flag
+
+	saveResults = true;
 
 ### 5 License
 HDR-US was developed at the Harvard Biorobotics Lab.
