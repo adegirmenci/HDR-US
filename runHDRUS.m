@@ -18,9 +18,7 @@ close all; clear all; clc
 saveResults = false;
 
 %% Step 0: Choose Working Directory
-cd ..
 root = pwd; % current directory
-cd source
 workingDir = uigetdir([root,filesep,'data']); % This opens a dialog
 % workingDir = [pwd,filesep,'Data',filesep,'exVivo']; % Alternatively, set working dir by hand
 relativePath = workingDir(length(root)+2:end);
@@ -67,18 +65,18 @@ disp('1) Read a stack of LDR images');
 
 %% 2
 disp('2) Read exposure values');
+
 %stack_exposure = ReadLDRStackInfo(name_folder, format); % from exif
+
 stack_exposure = exps_;
+% !! Make sure that the file order from ReadLDRStack matches expsure order
+% For example *_1,jpg, *_2.jpg, ... *_11.jpg will be ordered 1,11,2, so
+% renaming to 01,02,...11 would mitigate this.
 
 %%
 disp('3) Estimate the Response Curve');
 %[lin_fun, ~] = DebevecCRF(stack, stack_exposure);
 [lin_fun, ~, lEGray, zGray] = DebevecCRF(stack, stack_exposure);
-
-h = figure(1);
-set(h, 'Name', 'Response Curve');
-plot(x,0:255);
-semilogx(lin_fun(:,1), 0:255, 'r', lin_fun(:,2), 0:255, 'g', lin_fun(:,3), 0:255, 'b');
 
 gGray = log(lin_fun(:,1));
 zGray = squeeze(zGray(:,:,1));
@@ -88,9 +86,9 @@ figure('units','normalized','position',[.25 .25 .45 .3])
 plot(Xposure(:),zGray(:),'.','Color',ones(1,3)*.6);
 hold on
 plot(gGray,0:255,'k','LineWidth',3);
+box on; grid on;
 xticks(linspace(-10,10,5))
 yticks(round(linspace(0,255,5)))
-box on; grid on;
 xlim([-5,5])
 ylim([-5,260])
 xlabel('Log Pressure')
@@ -98,14 +96,31 @@ ylabel('Pixel Intensity')
 legend('Data','Recovered','Location','northwest')
 set(gca,'fontsize',16)
 
-% % export_fig responseFunc -pdf -depsc
+if(saveResults)
+    % Save as Variable
+    save([workingDir,filesep,'responseFunction.mat'],'lin_fun')
+    
+    % Save as PDF
+    set(gcf,'units','inch')
+    ppos = get(gcf, 'Position');
+    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+    print([workingDir,filesep,'responseFunc.pdf'],'-dpdf')
+    
+    % % If you have the export_fig package, this is easier to use
+    % export_fig([workingDir,filesep,'responseFunc'],'-pdf','-depsc');
+end
+
+% % To reuse a previously calculated response function:
+% load([workingDir,filesep,'responseFunction.mat'])
 
 %%
 disp('4) Build the radiance map using the stack and stack_exposure');
 imgHDR = BuildHDR(stack, stack_exposure, 'LUT', lin_fun, 'Robertson', 'log', 1);
 
-% disp('5) Save the radiance map in the .hdr format');
-% hdrimwrite(imgHDR, 'stack_hdr_image.exr');
+if(saveResults)
+    disp('5) Save the radiance map in the .hdr format');
+    hdrimwrite(imgHDR, [workingDir,filesep,'stack_hdr_image.hdr']);
+end
 
 %% Show HDR luminance
 
@@ -124,58 +139,190 @@ colorbar('FontSize',11,'YTick',log10(c),'YTickLabel',round(c,2),'TickLabelInterp
 axis([0 size(imgHDR,2), 0 size(imgHDR,1)])
 set(gca,'XTick',[])
 set(gca,'YTick',[])
+title('HDR Image')
 
-% saveas(gcf,['.',filesep,relativePath,filesep,'luminanceMap_wColorbar'],'png')
-% export_fig(['.',filesep,relativePath,filesep,'luminanceMap_wColorbar'],'-png');
+% saveas(gcf,[workingDir,filesep,'luminanceMap_wColorbar'],'png')
+% export_fig([workingDir,filesep,'luminanceMap_wColorbar'],'-png');
 
-%%
+%% Tone Mapping
 
 disp('6) Show the tone mapped version of the radiance map with gamma encoding');
-% h = figure;
-% set(h, 'Name', 'Tone mapped version of the built HDR image');
 
-imgOutReinhardGlobal = ReinhardTMO(double(imgHDR), 0.095, 0, 'global');
-imgOutReinhardLocal = ReinhardTMO(double(imgHDR), 0.095, 0, 'local');
-imgOutReinhardBilateral = ReinhardTMO(double(imgHDR), 0.095, 0, 'bilateral');
-imgOutDurand = DurandTMO(double(imgHDR),24);
-imgOutAdaptHist = tonemap_(imgHDR, 'AdjustLightness', [0.1 1.0], ...
+nTMOs = 5;
+
+hdrAdaptHist = tonemap_(imgHDR, 'AdjustLightness', [0.1 1.0], ...
                                   'AdjustSaturation', 0.6, ...
                                   'NumberOfTiles', [8,8]); % CLAHE
-imgOutAdaptHist = ClampImg(imgOutAdaptHist, 0, 1);
+hdrAdaptHist = ClampImg(hdrAdaptHist, 0, 1);
+
+hdrReinhardGlobal = ReinhardTMO(double(imgHDR), 0, 0, 'global');
+hdrReinhardLocal = ReinhardTMO(double(imgHDR), 0, 0, 'local');
+hdrReinhardBilateral = ReinhardTMO(double(imgHDR), 0, 0, 'bilateral');
+hdrDurand = DurandTMO(double(imgHDR),22);
+
 
 % Gamma correction
-
-imgOutReinhardGlobal = GammaTMO(imgOutReinhardGlobal, 2.2, 0.0, 0);
-imgOutReinhardLocal = GammaTMO(imgOutReinhardLocal, 2.2, 0.0, 0);
-imgOutReinhardBilateral = GammaTMO(imgOutReinhardBilateral, 2.2, 0.0, 0);
-imgOutDurand = GammaTMO(imgOutDurand, 2.2, 0.0, 0);
-imgOutAdaptHist = GammaTMO(imgOutAdaptHist, 1.0, 0.0, 0);
+hdrAdaptHist = GammaTMO(hdrAdaptHist, 1.0, 0.0, 0);
+hdrReinhardGlobal = GammaTMO(hdrReinhardGlobal, 2.2, 0.0, 0);
+hdrReinhardLocal = GammaTMO(hdrReinhardLocal, 2.2, 0.0, 0);
+hdrReinhardBilateral = GammaTMO(hdrReinhardBilateral, 2.2, 0.0, 0);
+hdrDurand = GammaTMO(hdrDurand, 2.2, 0.0, 0);
 
 % Rescale
+hdrAdaptHist = rescale(hdrAdaptHist);
+hdrReinhardGlobal = rescale(hdrReinhardGlobal);
+hdrReinhardLocal = rescale(hdrReinhardLocal);
+hdrReinhardBilateral = rescale(hdrReinhardBilateral);
+hdrDurand = rescale(hdrDurand);
 
-imgOutReinhardGlobal = rescale(imgOutReinhardGlobal);
-imgOutReinhardLocal = rescale(imgOutReinhardLocal);
-imgOutReinhardBilateral = rescale(imgOutReinhardBilateral);
-imgOutDurand = rescale(imgOutDurand);
-imgOutAdaptHist = rescale(imgOutAdaptHist);
+% hdrReinhardGlobal = (hdrReinhardGlobal - min(hdrReinhardGlobal(:))) / (max(hdrReinhardGlobal(:)) - min(hdrReinhardGlobal(:)));
+% hdrReinhardLocal = (hdrReinhardLocal - min(hdrReinhardLocal(:))) / (max(hdrReinhardLocal(:)) - min(hdrReinhardLocal(:)));
+% hdrReinhardBilateral = (hdrReinhardBilateral - min(hdrReinhardBilateral(:))) / (max(hdrReinhardBilateral(:)) - min(hdrReinhardBilateral(:)));
+% hdrDurand = (hdrDurand - min(hdrDurand(:))) / (max(hdrDurand(:)) - min(hdrDurand(:)));
+% hdrAdaptHist = (hdrAdaptHist - min(hdrAdaptHist(:))) / (max(hdrAdaptHist(:)) - min(hdrAdaptHist(:)));
 
-% imgOutReinhardGlobal = (imgOutReinhardGlobal - min(imgOutReinhardGlobal(:))) / (max(imgOutReinhardGlobal(:)) - min(imgOutReinhardGlobal(:)));
-% imgOutReinhardLocal = (imgOutReinhardLocal - min(imgOutReinhardLocal(:))) / (max(imgOutReinhardLocal(:)) - min(imgOutReinhardLocal(:)));
-% imgOutReinhardBilateral = (imgOutReinhardBilateral - min(imgOutReinhardBilateral(:))) / (max(imgOutReinhardBilateral(:)) - min(imgOutReinhardBilateral(:)));
-% imgOutDurand = (imgOutDurand - min(imgOutDurand(:))) / (max(imgOutDurand(:)) - min(imgOutDurand(:)));
-% imgOutAdaptHist = (imgOutAdaptHist - min(imgOutAdaptHist(:))) / (max(imgOutAdaptHist(:)) - min(imgOutAdaptHist(:)));
+% Grayscale
+hdrAdaptHist = rgb2gray(hdrAdaptHist);
+hdrReinhardGlobal = rgb2gray(hdrReinhardGlobal);
+hdrReinhardLocal = rgb2gray(hdrReinhardLocal);
+hdrReinhardBilateral = rgb2gray(hdrReinhardBilateral);
+hdrDurand = rgb2gray(hdrDurand);
 
-% figure; imshow(imgOutReinhardGlobal);
-% figure; imshow(imgOutReinhardLocal)
-% figure; imshow(imgOutReinhardBilateral)
-% figure; imshow(imgOutDurand)
-% figure; imshow(imgOutAdaptHist)
+%% Display Results
 
-%%
+figure('units','pixels','position',[200 200 size(imgHDR,2)*5 size(imgHDR,1)])
+subplot(1,5,1); imshow(hdrAdaptHist); title('Adaptive Hist Eq')
+subplot(1,5,2); imshow(hdrReinhardGlobal); title('Reinhard Global')
+subplot(1,5,3); imshow(hdrReinhardLocal); title('Reinhard Local')
+subplot(1,5,4); imshow(hdrReinhardBilateral); title('Reinhard Bilateral')
+subplot(1,5,5); imshow(hdrDurand); title('Durand')
+
+%% Save Results
+
 if(saveResults)
-    imwrite(imgOutReinhardGlobal, [workingDir,filesep,'hdrReinhard_global','.png']);
-    imwrite(imgOutReinhardLocal, [workingDir,filesep,'hdrReinhard_local','.png']);
-    imwrite(imgOutReinhardBilateral, [workingDir,filesep,'hdrReinhard_bilateral','.png']);
-    imwrite(imgOutDurand, [workingDir,filesep,'hdrDurand','.png']);
-    imwrite(imgOutAdaptHist, [workingDir,filesep,'hdrAdaptHist.png']);
+    imwrite(hdrAdaptHist, [workingDir,filesep,'hdrAdaptHist.png']);
+    imwrite(hdrReinhardGlobal, [workingDir,filesep,'hdrReinhard_global','.png']);
+    imwrite(hdrReinhardLocal, [workingDir,filesep,'hdrReinhard_local','.png']);
+    imwrite(hdrReinhardBilateral, [workingDir,filesep,'hdrReinhard_bilateral','.png']);
+    imwrite(hdrDurand, [workingDir,filesep,'hdrDurand','.png']);
+end
+
+%% TMO Evaluation
+
+for i = 1:numel(images)
+    images(i).image = rgb2gray(im2double(images(i).image));
+end
+
+%% Set sliding window (patch) size
+
+squareSize = 40; % patch size
+stepSize = 10; % steps between patch locations
+
+% patch locations
+xList = 1 : stepSize : (size(imgHDR, 2)-squareSize);
+yList = 1 : stepSize : (size(imgHDR, 1)-squareSize);
+
+% Grid
+[Xlist, Ylist] = ndgrid(xList,yList);
+XY = [Xlist(:),Ylist(:)];
+numXY = size(XY,1);
+
+%% Prealloc
+
+psnrScores = zeros(nTMOs, numel(images), numXY);
+
+% for parfor
+localPSNRscores = zeros(nTMOs, numel(images));
+
+%% Evaluate TMOs
+
+reverseStr = ''; % for status updates
+
+for k = 1:numXY
+    roi_ = [XY(k,:), squareSize, squareSize]; % current patch
+    
+    % Crop each TMO
+    hdrAdaptHistCrop = imcrop(hdrAdaptHist, roi_);
+    hdrReinhardGlobalCrop = imcrop(hdrReinhardGlobal, roi_);
+    hdrReinhardLocalCrop = imcrop(hdrReinhardLocal, roi_);
+    hdrReinhardBilateralCrop = imcrop(hdrReinhardBilateral, roi_);
+    hdrDurandCrop = imcrop(hdrDurand, roi_);
+    
+    % Execute in parallel
+    parfor j = 1:numel(images)
+        refImage = imcrop(images(j).image, roi_);
+        
+        localPSNRscores(:,j) = [psnr(hdrAdaptHistCrop,refImage);
+                                psnr(hdrReinhardGlobalCrop, refImage);
+                                psnr(hdrReinhardLocalCrop,refImage);
+                                psnr(hdrReinhardBilateralCrop,refImage);
+                                psnr(hdrDurandCrop,refImage)];
+    end
+    
+    % add local parfor results to global
+    psnrScores(:,:,k) = localPSNRscores;
+    
+    % Update status
+    if(~mod(k-1,5))
+        msg = sprintf('Processed %d/%d', k, numXY);
+        fprintf([reverseStr, msg]);
+        reverseStr = repmat(sprintf('\b'), 1, length(msg));
+    end
+    
+end
+fprintf('\n')
+
+%% Process PSNR grid scores
+% close all
+
+powers = PowerdB';
+
+hdrImages = zeros(size(imgHDR,1), size(imgHDR,2), 5);
+hdrImages(:,:,1) =  hdrAdaptHist;
+hdrImages(:,:,2) =  hdrReinhardGlobal;
+hdrImages(:,:,3) =  hdrReinhardLocal;
+hdrImages(:,:,4) =  hdrReinhardBilateral;
+hdrImages(:,:,5) =  hdrDurand;
+
+% Plot prep
+figure('units','pixels','position',[200 200 size(imgHDR,2)*5 size(imgHDR,1)])
+titles = {'Adaptive Hist Eq', 'Reinhard Global', 'Reinhard Local', 'Reinhard Bilateral', 'Durand'};
+
+% find arg max to get the reference image index that corresponds most with
+% that window
+maxMap = zeros(size(psnrScores,1),size(psnrScores,3));
+argMaxMap = zeros(size(psnrScores,1),size(psnrScores,3));
+for i = 1:size(psnrScores,1)
+    localPSNR = squeeze(psnrScores(i,:,:)); % 15  X  52689
+    [localMax, localArgMax] = max(localPSNR,[],1); % 1  X  52689
+
+    maxMap(i,:) = localMax;
+    argMaxMap(i,:) = localArgMax;
+
+    argMaxImage = reshape(localArgMax,size(Xlist));
+    
+    argMaxDB = arrayfun(@(x) powers(x),argMaxImage);
+    
+    subplot(1,5,i);
+    [C,h] = contourf(Xlist, Ylist, fliplr(argMaxDB),powers,'LineWidth',0.01,'Color','k');%,'ShowText','on')
+    title(titles{i})
+
+    colormap(jet)
+    axis equal
+    %axis off
+    set(gca,'Xtick',[])
+    set(gca,'Ytick',[])
+    xlim([Xlist(1)-squareSize/2 Xlist(end)+squareSize/2])
+    ylim([Ylist(1)-squareSize/2 Ylist(end)+squareSize/2])
+end
+
+if(saveResults)
+    % Save as PDF
+    set(gcf,'units','inch')
+    ppos = get(gcf, 'Position');
+    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+    print([workingDir,filesep,'TMO_similarityMaps.pdf'],'-dpdf')
+    
+    % % If you have the export_fig package, this is easier to use
+    % export_fig([workingDir,filesep,'TMO_similarityMaps'],'-pdf','-depsc');
 end
