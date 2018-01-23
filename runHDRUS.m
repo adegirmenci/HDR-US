@@ -82,19 +82,22 @@ gGray = log(lin_fun(:,1));
 zGray = squeeze(zGray(:,:,1));
 Xposure = log(exp(lEGray(:,1))*stack_exposure);
 
-figure('units','normalized','position',[.25 .25 .45 .3])
-plot(Xposure(:),zGray(:),'.','Color',ones(1,3)*.6);
+figure('units','normalized','position',[.25 .25 .45 .25])
+plot(Xposure(:),zGray(:),'.','Color',ones(1,3)*.55);
 hold on
 plot(gGray,0:255,'k','LineWidth',3);
 box on; grid on;
 xticks(linspace(-10,10,5))
-yticks(round(linspace(0,255,5)))
+yticks(round(linspace(0,255,3)))
 xlim([-5,5])
 ylim([-5,260])
 xlabel('Log Pressure')
 ylabel('Pixel Intensity')
-legend('Data','Recovered','Location','northwest')
-set(gca,'fontsize',16)
+legend('Sampled Pixels','Recovered Curve','Location','northwest')
+ax = gca;
+ax.LineWidth = 1;
+ax.FontName = 'Times New Roman';
+set(ax,'FontSize',16)
 
 if(saveResults)
     % Save as Variable
@@ -160,13 +163,21 @@ hdrReinhardLocal = ReinhardTMO(double(imgHDR), 0, 0, 'local');
 hdrReinhardBilateral = ReinhardTMO(double(imgHDR), 0, 0, 'bilateral');
 hdrDurand = DurandTMO(double(imgHDR),22);
 
+% Some other TMO options
+% hdrWardHistAdj = WardHistAdjTMO(double(imgHDR));
+% hdrTumblin = TumblinTMO(double(imgHDR));
+% hdrRDevlin = ReinhardDevlinTMO(double(imgHDR));
+% hdrRaman = RamanTMO([], stack);
+% hdrMertens = MertensTMO([], stack);
+% hdrBruce = BruceExpoBlendTMO([], stack, 29, 6);
 
 % Gamma correction
 hdrAdaptHist = GammaTMO(hdrAdaptHist, 1.0, 0.0, 0);
-hdrReinhardGlobal = GammaTMO(hdrReinhardGlobal, 2.2, 0.0, 0);
-hdrReinhardLocal = GammaTMO(hdrReinhardLocal, 2.2, 0.0, 0);
-hdrReinhardBilateral = GammaTMO(hdrReinhardBilateral, 2.2, 0.0, 0);
-hdrDurand = GammaTMO(hdrDurand, 2.2, 0.0, 0);
+gamma = 2.2;
+hdrReinhardGlobal = GammaTMO(hdrReinhardGlobal, gamma, 0.0, 0);
+hdrReinhardLocal = GammaTMO(hdrReinhardLocal, gamma, 0.0, 0);
+hdrReinhardBilateral = GammaTMO(hdrReinhardBilateral, gamma, 0.0, 0);
+hdrDurand = GammaTMO(hdrDurand, gamma, 0.0, 0);
 
 % Rescale
 hdrAdaptHist = rescale(hdrAdaptHist);
@@ -174,12 +185,6 @@ hdrReinhardGlobal = rescale(hdrReinhardGlobal);
 hdrReinhardLocal = rescale(hdrReinhardLocal);
 hdrReinhardBilateral = rescale(hdrReinhardBilateral);
 hdrDurand = rescale(hdrDurand);
-
-% hdrReinhardGlobal = (hdrReinhardGlobal - min(hdrReinhardGlobal(:))) / (max(hdrReinhardGlobal(:)) - min(hdrReinhardGlobal(:)));
-% hdrReinhardLocal = (hdrReinhardLocal - min(hdrReinhardLocal(:))) / (max(hdrReinhardLocal(:)) - min(hdrReinhardLocal(:)));
-% hdrReinhardBilateral = (hdrReinhardBilateral - min(hdrReinhardBilateral(:))) / (max(hdrReinhardBilateral(:)) - min(hdrReinhardBilateral(:)));
-% hdrDurand = (hdrDurand - min(hdrDurand(:))) / (max(hdrDurand(:)) - min(hdrDurand(:)));
-% hdrAdaptHist = (hdrAdaptHist - min(hdrAdaptHist(:))) / (max(hdrAdaptHist(:)) - min(hdrAdaptHist(:)));
 
 % Grayscale
 hdrAdaptHist = rgb2gray(hdrAdaptHist);
@@ -206,7 +211,7 @@ if(saveResults)
     imwrite(hdrReinhardBilateral, [workingDir,filesep,'hdrReinhard_bilateral','.png']);
     imwrite(hdrDurand, [workingDir,filesep,'hdrDurand','.png']);
 end
-
+return
 %% TMO Evaluation
 
 for i = 1:numel(images)
@@ -326,3 +331,139 @@ if(saveResults)
     % % If you have the export_fig package, this is easier to use
     % export_fig([workingDir,filesep,'TMO_similarityMaps'],'-pdf','-depsc');
 end
+
+%% Histogram
+i_s = [1,5,9,15];
+saveResults = false;
+
+for i = 1:numel(i_s)
+    plotHistogram(stack(:,:,1,i_s(i)),...
+              sprintf('%.2fdB',PowerdB(i_s(i))),...
+              saveResults, workingDir);
+end
+
+plotHistogram(hdrDurand,...
+              'HDR_Durand',...
+              saveResults, workingDir);
+          
+%% Study the effect of number of reference images on HDR quality
+
+% Don't need tone mapping
+% Compare HDR to HDR directly
+% Take the 15 image version as ground truth
+
+% Generate combinations with 2 to 15 images
+nImgs = 2:15;
+imgIdxs = cell(numel(nImgs),1);
+for i = 1:numel(imgIdxs)
+    nImg = nImgs(i);
+    imgIdxs{i} = round(linspace(1,15,nImg));
+    % disp(imgIdxs{i})
+end
+
+% compute HDR
+HDRimgs = zeros(size(imgHDR,1),size(imgHDR,2),size(imgHDR,3),numel(nImgs));
+for i = 1:numel(imgIdxs)
+    idxs = imgIdxs{i};
+    subStack = stack(:,:,:,idxs);
+    subExposures = stack_exposure(idxs);
+    localHDR = BuildHDR(subStack, subExposures, 'LUT', lin_fun, 'Robertson', 'log', 1);
+    HDRimgs(:,:,:,i) = localHDR;
+end
+
+% compute similarity
+ssimScores = zeros(numel(imgIdxs),1);
+mseScores = zeros(numel(imgIdxs),1);
+groundTruth = HDRimgs(:,:,1,end);
+for i = 1:numel(imgIdxs)
+    thisImage = HDRimgs(:,:,1,i);
+    ssimScores(i) = ssim(thisImage, groundTruth);
+    mseScores(i) = immse(thisImage, groundTruth);
+end
+
+%%
+figure('units','normalized','position',[.25 .25 .3 .25])
+
+ax = gca;
+
+yyaxis left
+semilogx(2:15, ssimScores, '-o', 'LineWidth', 2)
+ylabel('SSIM')
+xlabel('Number of images')
+ylim([-0.1,1.1])
+xlim([1.9,16])
+xticks([2,5,10,15])
+yticks(linspace(0,1,5))
+
+yyaxis right
+semilogx(2:15, mseScores, '-.+', 'LineWidth', 2)
+ylabel('MSE')
+ax.YDir = 'reverse';
+ylim([-1.8,19.75])
+yticks(linspace(0,18,4))
+
+box on; grid on;
+
+legend('SSIM','MSE','Location','southeast')
+ax.LineWidth = 1;
+ax.FontName = 'Times New Roman';
+set(ax,'FontSize',16)
+
+if(saveResults)
+    % Save as PDF
+    set(gcf,'units','inch')
+    ppos = get(gcf, 'Position');
+    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+    print([workingDir,filesep,'nImagesStudy.pdf'],'-dpdf')
+    
+    % % If you have the export_fig package, this is easier to use
+    % export_fig([workingDir,filesep,'nImagesStudy'],'-pdf','-depsc');
+end
+
+%% More complex: consider all combinations of images, not just linspace
+
+% Generate combinations with 2 to 15 images
+nImgs = 2:15;
+imgIdxs = cell(numel(nImgs),1);
+for i = 1:numel(imgIdxs)
+    nImg = nImgs(i);
+    imgIdxs{i} = combnk(1:15, nImg); % n choose k
+    % disp(imgIdxs{i})
+end
+
+% compute HDR
+% too expensive to hold all in memory, compute ssim/mse and discard
+groundTruth = imgHDR;
+
+ssimScores = cell(numel(nImgs),1);
+mseScores = cell(numel(nImgs),1);
+reverseStr = ''; % for status updates
+for i = 1:numel(imgIdxs)
+    localssimScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
+    localmseScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
+    
+    fprintf('Processing (%d choose %d) %d combinations', nImgs(end), nImgs(i), size(imgIdxs{i},1))
+    parfor j = 1:size(imgIdxs{i},1)
+        idxs = imgIdxs{i}(j,:);
+        subStack = stack(:,:,:,idxs);
+        subExposures = stack_exposure(idxs);
+        thisHDR = BuildHDR(subStack, subExposures, 'LUT', lin_fun, 'Robertson', 'log', 1);
+        
+        % compute similarity
+        localssimScores(j) = ssim(thisHDR(:,:,1), groundTruth(:,:,1));
+        localmseScores(j) = immse(thisHDR(:,:,1), groundTruth(:,:,1));
+    end
+    
+    ssimScores{i} = localssimScores;
+    mseScores{i} = localmseScores;
+    fprintf('...done.\n')
+    reverseStr = '';
+end
+fprintf('\n')
+%%
+% Find the argmax of scores
+[maxSSIM, argmaxSSIM] = cellfun(@max, ssimScores, 'UniformOutput', false);
+[minMSE, argminMSE] = cellfun(@min, mseScores, 'UniformOutput', false);
+
+imgIdxs{3}(find(ssimScores{3} > 0.893),:)
+imgIdxs{3}(find(mseScores{3} < 2.8),:)
