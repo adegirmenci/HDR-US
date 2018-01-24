@@ -433,7 +433,7 @@ end
 
 % compute HDR
 % too expensive to hold all in memory, compute ssim/mse and discard
-groundTruth = imgHDR;
+groundTruth = imgHDR(:,:,1);
 
 ssimScores = cell(numel(nImgs),1);
 mseScores = cell(numel(nImgs),1);
@@ -442,16 +442,18 @@ for i = 1:numel(imgIdxs)
     localssimScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
     localmseScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
     
+    subImgIdxs = imgIdxs{i};
+    
     fprintf('Processing (%d choose %d) %d combinations', nImgs(end), nImgs(i), size(imgIdxs{i},1))
     parfor j = 1:size(imgIdxs{i},1)
-        idxs = imgIdxs{i}(j,:);
+        idxs = subImgIdxs(j,:);
         subStack = stack(:,:,:,idxs);
         subExposures = stack_exposure(idxs);
         thisHDR = BuildHDR(subStack, subExposures, 'LUT', lin_fun, 'Robertson', 'log', 1);
         
         % compute similarity
-        localssimScores(j) = ssim(thisHDR(:,:,1), groundTruth(:,:,1));
-        localmseScores(j) = immse(thisHDR(:,:,1), groundTruth(:,:,1));
+        localssimScores(j) = ssim(thisHDR(:,:,1), groundTruth);
+        localmseScores(j) = immse(thisHDR(:,:,1), groundTruth);
     end
     
     ssimScores{i} = localssimScores;
@@ -460,10 +462,62 @@ for i = 1:numel(imgIdxs)
     reverseStr = '';
 end
 fprintf('\n')
-%%
-% Find the argmax of scores
-[maxSSIM, argmaxSSIM] = cellfun(@max, ssimScores, 'UniformOutput', false);
-[minMSE, argminMSE] = cellfun(@min, mseScores, 'UniformOutput', false);
 
-imgIdxs{3}(find(ssimScores{3} > 0.893),:)
-imgIdxs{3}(find(mseScores{3} < 2.8),:)
+% save([workingDir,filesep,'ssimScores.mat'],'ssimScores')
+% save([workingDir,filesep,'mseScores.mat'],'mseScores')
+
+%% Find the argmax of scores
+[maxSSIM, argmaxSSIM] = cellfun(@max, ssimScores, 'UniformOutput', false);
+[minSSIM, argminSSIM] = cellfun(@min, ssimScores, 'UniformOutput', false);
+[maxMSE, argminMSE] = cellfun(@max, mseScores, 'UniformOutput', false);
+[minMSE, argminMSE] = cellfun(@min, mseScores, 'UniformOutput', false);
+maxSSIM = cell2mat(maxSSIM);
+minSSIM = cell2mat(minSSIM);
+maxMSE = cell2mat(maxMSE);
+minMSE = cell2mat(minMSE);
+
+imgIdxs{3}(ssimScores{3} > 0.893,:)
+imgIdxs{3}(mseScores{3} < 2.8,:)
+
+%% Plot max scores
+figure('units','normalized','position',[.25 .25 .3 .25])
+
+hold on
+
+ax = gca;
+
+yyaxis left
+semilogx(2:15, maxSSIM, '-o', 'LineWidth', 2)
+semilogx(2:15, minSSIM, '--x', 'LineWidth', 2)
+ylabel('SSIM')
+xlabel('Number of images')
+ylim([-0.1,1.1])
+xlim([1.9,16])
+xticks([2,5,10,15])
+yticks(linspace(0,1,5))
+
+yyaxis right
+semilogx(2:15, minMSE, '-.+', 'LineWidth', 2)
+semilogx(2:15, maxMSE, ':^', 'LineWidth', 2)
+ylabel('MSE')
+ax.YDir = 'reverse';
+ylim([-0.1*maxMSE(1),1.1*maxMSE(1)])
+yticks(linspace(0,round(maxMSE(1),1),5))
+
+box on; grid on;
+
+legend('SSIM max','SSIM min','MSE min','MSE max','Location','southeast')
+ax.LineWidth = 1;
+ax.FontName = 'Times New Roman';
+set(ax,'FontSize',16)
+
+if(saveResults)
+    % Save as PDF
+    set(gcf,'units','inch')
+    ppos = get(gcf, 'Position');
+    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+    print([workingDir,filesep,'nImagesStudy.pdf'],'-dpdf')
+    
+    % % If you have the export_fig package, this is easier to use
+    % export_fig([workingDir,filesep,'nImagesStudy'],'-pdf','-depsc');
+end
