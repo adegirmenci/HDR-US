@@ -353,11 +353,15 @@ plotHistogram(hdrDurand,...
 % Take the 15 image version as ground truth
 
 % Generate combinations with 2 to 15 images
-nImgs = 2:15;
+nImgs = 1:15;
 imgIdxs = cell(numel(nImgs),1);
 for i = 1:numel(imgIdxs)
     nImg = nImgs(i);
-    imgIdxs{i} = round(linspace(1,15,nImg));
+    if(i == 1)
+        imgIdxs{i} = 8;
+    else
+        imgIdxs{i} = round(linspace(1,15,nImg));
+    end
     % disp(imgIdxs{i})
 end
 
@@ -387,16 +391,16 @@ figure('units','normalized','position',[.25 .25 .3 .25])
 ax = gca;
 
 yyaxis left
-semilogx(2:15, ssimScores, '-o', 'LineWidth', 2)
+semilogx(nImgs, ssimScores, '-o', 'LineWidth', 2)
 ylabel('SSIM')
 xlabel('Number of images')
 ylim([-0.1,1.1])
-xlim([1.9,16])
-xticks([2,5,10,15])
+xlim([nImgs(1)-0.1,nImgs(end)+1])
+xticks([1,5,10,15])
 yticks(linspace(0,1,5))
 
 yyaxis right
-semilogx(2:15, mseScores, '-.+', 'LineWidth', 2)
+semilogx(nImgs, mseScores, '-.+', 'LineWidth', 2)
 ylabel('MSE')
 ax.YDir = 'reverse';
 ylim([-1.8,19.75])
@@ -420,10 +424,12 @@ if(saveResults)
     % export_fig([workingDir,filesep,'nImagesStudy'],'-pdf','-depsc');
 end
 
+uniformSSIM = ssimScores;
+uniformMSE = mseScores;
 %% More complex: consider all combinations of images, not just linspace
 
 % Generate combinations with 2 to 15 images
-nImgs = 2:15;
+nImgs = 1:15;
 imgIdxs = cell(numel(nImgs),1);
 for i = 1:numel(imgIdxs)
     nImg = nImgs(i);
@@ -466,6 +472,7 @@ fprintf('\n')
 % save([workingDir,filesep,'ssimScores.mat'],'ssimScores')
 % save([workingDir,filesep,'mseScores.mat'],'mseScores')
 
+
 %% Find the argmax of scores
 [maxSSIM, argmaxSSIM] = cellfun(@max, ssimScores, 'UniformOutput', false);
 [minSSIM, argminSSIM] = cellfun(@min, ssimScores, 'UniformOutput', false);
@@ -476,8 +483,8 @@ minSSIM = cell2mat(minSSIM);
 maxMSE = cell2mat(maxMSE);
 minMSE = cell2mat(minMSE);
 
-imgIdxs{3}(ssimScores{3} > 0.893,:)
-imgIdxs{3}(mseScores{3} < 2.8,:)
+% imgIdxs{3}(ssimScores{3} > 0.893,:)
+% imgIdxs{3}(mseScores{3} < 2.8,:)
 
 %% Plot max scores
 figure('units','normalized','position',[.25 .25 .3 .25])
@@ -487,18 +494,18 @@ hold on
 ax = gca;
 
 yyaxis left
-semilogx(2:15, maxSSIM, '-o', 'LineWidth', 2)
-semilogx(2:15, minSSIM, '--x', 'LineWidth', 2)
+semilogx(nImgs, maxSSIM, '-o', 'LineWidth', 2)
+semilogx(nImgs, minSSIM, '--x', 'LineWidth', 2)
 ylabel('SSIM')
 xlabel('Number of images')
 ylim([-0.1,1.1])
-xlim([1.9,16])
-xticks([2,5,10,15])
+xlim([nImgs(1)-0.1,nImgs(end)+1])
+xticks([1,5,10,15])
 yticks(linspace(0,1,5))
 
 yyaxis right
-semilogx(2:15, minMSE, '-.+', 'LineWidth', 2)
-semilogx(2:15, maxMSE, ':^', 'LineWidth', 2)
+semilogx(nImgs, minMSE, '-.+', 'LineWidth', 2)
+semilogx(nImgs, maxMSE, ':^', 'LineWidth', 2)
 ylabel('MSE')
 ax.YDir = 'reverse';
 ylim([-0.1*maxMSE(1),1.1*maxMSE(1)])
@@ -520,4 +527,85 @@ if(saveResults)
     
     % % If you have the export_fig package, this is easier to use
     % export_fig([workingDir,filesep,'nImagesStudy'],'-pdf','-depsc');
+end
+
+%% Only plot MSE
+figure('units','normalized','position',[.25 .25 .25 .25])
+
+pctg = 2:15;
+%pctg = pctg./0.15;
+
+ax = gca;
+
+plot(pctg, minMSE, '-+', 'LineWidth', 2, 'MarkerSize', 9)
+hold on
+plot(pctg, maxMSE, '-.^', 'LineWidth', 2, 'MarkerSize', 9)
+plot(pctg, uniformMSE(2:end), ':ok', 'LineWidth', 2, 'MarkerSize', 9)
+ylabel('MSE')
+xlabel('Number of images used')
+xlim([1.9,15.1])
+% xlabel('Percentage of available images')
+% xlim([0,101])
+ylim([-0.1*maxMSE(1),1.1*maxMSE(1)])
+xticks(round(linspace(2,15,4)))
+% yticks(round(linspace(0,round(maxMSE(1)),5)))
+yticks(0:10:40)
+
+box off
+
+legend('Best','Worst','Uniform','Location','northeast')
+ax.LineWidth = 1;
+ax.FontName = 'Times New Roman';
+set(ax,'FontSize',16)
+
+if(saveResults)
+    % Save as PDF
+    set(gcf,'units','inch')
+    ppos = get(gcf, 'Position');
+    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+    print([workingDir,filesep,'nImagesStudy_MSE.pdf'],'-dpdf')
+    
+    % % If you have the export_fig package, this is easier to use
+    % export_fig([workingDir,filesep,'nImagesStudy_MSE'],'-pdf','-depsc');
+end
+
+%% Only plot SSIM
+figure('units','normalized','position',[.25 .25 .25 .25])
+
+ax = gca;
+
+h1 = plot(pctg, maxSSIM, '-+', 'LineWidth', 2, 'MarkerSize', 9);
+hold on
+hline = refline([0,0.9]);
+hline.Color = 'k';
+hline.LineStyle = '--';
+h2 = plot(pctg, minSSIM, '-.^', 'LineWidth', 2, 'MarkerSize', 9);
+h3 = plot(pctg, uniformSSIM(2:end), ':ok', 'LineWidth', 2, 'MarkerSize', 9);
+
+xlabel('Number of images used')
+xlim([1.9,15.1])
+% xlim([pctg(1)-1,pctg(end)+1])
+% xlabel('Percentage of available images')
+ylabel('SSIM')
+ylim([-0.1, 1.1])
+xticks(round(linspace(2,15,4)))
+yticks(linspace(0,1,5))
+
+box off
+%box on; grid on;
+
+legend([h1,h2,h3],{'Best','Worst','Uniform'},'Location','southeast')
+ax.LineWidth = 1;
+ax.FontName = 'Times New Roman';
+set(ax,'FontSize',16)
+
+if(saveResults)
+    % Save as PDF
+    set(gcf,'units','inch')
+    ppos = get(gcf, 'Position');
+    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+    print([workingDir,filesep,'nImagesStudy_SSIM.pdf'],'-dpdf')
+    
+    % % If you have the export_fig package, this is easier to use
+    % export_fig([workingDir,filesep,'nImagesStudy_SSIM'],'-pdf','-depsc');
 end
