@@ -354,9 +354,10 @@ plotHistogram(hdrDurand,...
 
 % set flags
 normalize = true;
-computeSSIM = false; % skipping this will make computations faster, MSE and SSIM have similar trends
+computeSSIM = true; % skipping this will make computations faster, MSE and SSIM have similar trends
 computeMSE = true;
 computeDynRanges = false; % not that informative
+saveOutput = true; % save MAT files
 
 % Generate combinations with 2 to 15 images
 nImgs = 1:15;
@@ -410,6 +411,7 @@ end
 %% Plot
 figure('units','normalized','position',[.25 .25 .3 .25])
 
+nImgs = 1:15;
 ax = gca;
 
 yyaxis left
@@ -535,7 +537,7 @@ for i = 1:numel(imgIdxs)
 end
 fprintf('\n')
 
-if(saveResults)
+if(saveOutput)
     if(computeSSIM)
         save([workingDir,filesep,'ssimScores.mat'],'ssimScores')
     end
@@ -567,11 +569,10 @@ if(computeMSE)
     minMSE = cell2mat(minMSE);
 end
 
-% imgIdxs{3}(ssimScores{3} > 0.893,:)
-% imgIdxs{3}(mseScores{3} < 2.8,:)
-
 %% Plot max scores
 if(computeMSE && computeSSIM)
+    nImgs = 2:15;
+    
     figure('units','normalized','position',[.25 .25 .3 .25])
     
     hold on
@@ -579,8 +580,8 @@ if(computeMSE && computeSSIM)
     ax = gca;
     
     yyaxis left
-    semilogx(nImgs, maxSSIM, '-o', 'LineWidth', 2)
-    semilogx(nImgs, minSSIM, '--x', 'LineWidth', 2)
+    semilogx(nImgs, maxSSIM(nImgs), '-o', 'LineWidth', 2)
+    semilogx(nImgs, minSSIM(nImgs), '--x', 'LineWidth', 2)
     ylabel('SSIM')
     xlabel('Number of images')
     ylim([-0.1,1.1])
@@ -589,12 +590,12 @@ if(computeMSE && computeSSIM)
     yticks(linspace(0,1,5))
     
     yyaxis right
-    semilogx(nImgs, minMSE, '-.+', 'LineWidth', 2)
-    semilogx(nImgs, maxMSE, ':^', 'LineWidth', 2)
+    semilogx(nImgs, minMSE(nImgs), '-.+', 'LineWidth', 2)
+    semilogx(nImgs, maxMSE(nImgs), ':^', 'LineWidth', 2)
     ylabel('MSE')
     ax.YDir = 'reverse';
-    ylim([-0.1*maxMSE(1),1.1*maxMSE(1)])
-    yticks(linspace(0,round(maxMSE(1),1),5))
+    ylim([-0.1*maxMSE(nImgs(1)),1.1*maxMSE(nImgs(1))])
+    yticks(linspace(0,round(maxMSE(nImgs(1)),1),5))
     
     box on; grid on;
     
@@ -616,10 +617,9 @@ if(computeMSE && computeSSIM)
 end
 %% Only plot MSE
 if(computeMSE)
-    figure('units','normalized','position',[.25 .25 .3 .25])
-    
     nImgs = 2:15;
-    %pctg = pctg./0.15;
+    
+    figure('units','normalized','position',[.25 .25 .3 .25])
     
     ax = gca;
     
@@ -656,23 +656,25 @@ if(computeMSE)
 end
 %% Only plot SSIM
 if(computeSSIM)
+    nImgs = 2:15;
+    
     figure('units','normalized','position',[.25 .25 .3 .25])
     
     ax = gca;
     
-    h1 = plot(pctg, maxSSIM, '-+', 'LineWidth', 2, 'MarkerSize', 9);
+    h1 = plot(nImgs, maxSSIM(nImgs), '-+', 'LineWidth', 2, 'MarkerSize', 9);
     hold on
     hline = refline([0,0.9]);
     hline.Color = 'k';
     hline.LineStyle = '--';
-    h2 = plot(pctg, minSSIM, '-.^', 'LineWidth', 2, 'MarkerSize', 9);
-    h3 = plot(pctg, uniformSSIM, ':ok', 'LineWidth', 2, 'MarkerSize', 9);
+    h2 = plot(nImgs, minSSIM(nImgs), '-.^', 'LineWidth', 2, 'MarkerSize', 9);
+    h3 = plot(nImgs, uniformSSIM(nImgs), ':ok', 'LineWidth', 2, 'MarkerSize', 9);
     
     xlabel(sprintf('Number of images used out of %d', nImgs(end)))
-    xlim([1.9,15.1])
+    xlim([nImgs(1)-0.2,nImgs(end)+0.2])
     ylabel('SSIM')
     ylim([-0.1, 1.1])
-    xticks(round(linspace(2,15,4)))
+    xticks(round(linspace(nImgs(1),15,4)))
     yticks(linspace(0,1,5))
     
     box off
