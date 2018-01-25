@@ -211,7 +211,7 @@ if(saveResults)
     imwrite(hdrReinhardBilateral, [workingDir,filesep,'hdrReinhard_bilateral','.png']);
     imwrite(hdrDurand, [workingDir,filesep,'hdrDurand','.png']);
 end
-return
+
 %% TMO Evaluation
 
 for i = 1:numel(images)
@@ -352,6 +352,12 @@ plotHistogram(hdrDurand,...
 % Compare HDR to HDR directly
 % Take the 15 image version as ground truth
 
+% set flags
+normalize = true;
+computeSSIM = false; % skipping this will make computations faster, MSE and SSIM have similar trends
+computeMSE = true;
+computeDynRanges = false; % not that informative
+
 % Generate combinations with 2 to 15 images
 nImgs = 1:15;
 imgIdxs = cell(numel(nImgs),1);
@@ -376,10 +382,13 @@ for i = 1:numel(imgIdxs)
 end
 
 % compute similarity
-ssimScores = zeros(numel(imgIdxs),1);
-mseScores = zeros(numel(imgIdxs),1);
+if(computeSSIM)
+    ssimScores = zeros(numel(imgIdxs),1);
+end
+if(computeMSE)
+    mseScores = zeros(numel(imgIdxs),1);
+end
 groundTruth = HDRimgs(:,:,1,end);
-normalize = true;
 if(normalize)
     max_ = max(groundTruth(:));
     min_ = min(groundTruth(:));
@@ -390,8 +399,12 @@ for i = 1:numel(imgIdxs)
     if(normalize)
         thisImage = 255.*(thisImage - min_) ./ (max_ - min_);
     end
-    ssimScores(i) = ssim(thisImage, groundTruth);
-    mseScores(i) = immse(thisImage, groundTruth);
+    if(computeSSIM)
+        ssimScores(i) = ssim(thisImage, groundTruth);
+    end
+    if(computeMSE)
+        mseScores(i) = immse(thisImage, groundTruth);
+    end
 end
 
 %% Plot
@@ -436,12 +449,6 @@ end
 uniformSSIM = ssimScores;
 uniformMSE = mseScores;
 %% More complex: consider all combinations of images, not just linspace
-
-% set flags
-normalize = true;
-computeSSIM = false; % skipping this will make computations faster, MSE and SSIM have similar trends
-computeMSE = true;
-computeDynRanges = false; % not that informative
 
 % Generate combinations with 2 to 15 images
 nImgs = 1:15;
@@ -554,7 +561,7 @@ if(computeSSIM)
     minSSIM = cell2mat(minSSIM);
 end
 if(computeMSE)
-    [maxMSE, argminMSE] = cellfun(@max, mseScores, 'UniformOutput', false);
+    [maxMSE, argmaxMSE] = cellfun(@max, mseScores, 'UniformOutput', false);
     [minMSE, argminMSE] = cellfun(@min, mseScores, 'UniformOutput', false);
     maxMSE = cell2mat(maxMSE);
     minMSE = cell2mat(minMSE);
@@ -625,8 +632,9 @@ if(computeMSE)
     xlim([nImgs(1)-0.2, nImgs(end)+0.1])
     ylim([-0.1*maxMSE(nImgs(1)),1.1*maxMSE(nImgs(1))])
     xticks(round(linspace(nImgs(1),nImgs(end),4)))
-    %yticks(round(linspace(0,round(maxMSE(nImgs(1))),5)))
+%     yticks(round(linspace(0,round(maxMSE(nImgs(1))/5)*5,5)))
     yticks(linspace(0,100,5))
+    yticks(linspace(0,180,5))
     
     box off
     
