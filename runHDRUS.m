@@ -379,32 +379,41 @@ end
 ssimScores = zeros(numel(imgIdxs),1);
 mseScores = zeros(numel(imgIdxs),1);
 groundTruth = HDRimgs(:,:,1,end);
+normalize = true;
+if(normalize)
+    max_ = max(groundTruth(:));
+    min_ = min(groundTruth(:));
+    groundTruth = 255.*(groundTruth - min_) ./ (max_ - min_);
+end
 for i = 1:numel(imgIdxs)
     thisImage = HDRimgs(:,:,1,i);
+    if(normalize)
+        thisImage = 255.*(thisImage - min_) ./ (max_ - min_);
+    end
     ssimScores(i) = ssim(thisImage, groundTruth);
     mseScores(i) = immse(thisImage, groundTruth);
 end
 
-%%
+%% Plot
 figure('units','normalized','position',[.25 .25 .3 .25])
 
 ax = gca;
 
 yyaxis left
-semilogx(nImgs, ssimScores, '-o', 'LineWidth', 2)
+plot(nImgs, ssimScores, '-o', 'LineWidth', 2)
 ylabel('SSIM')
 xlabel('Number of images')
 ylim([-0.1,1.1])
-xlim([nImgs(1)-0.1,nImgs(end)+1])
+xlim([nImgs(1)-0.2,nImgs(end)+0.2])
 xticks([1,5,10,15])
 yticks(linspace(0,1,5))
 
 yyaxis right
-semilogx(nImgs, mseScores, '-.+', 'LineWidth', 2)
+plot(nImgs, mseScores, '-.+', 'LineWidth', 2)
 ylabel('MSE')
 ax.YDir = 'reverse';
-ylim([-1.8,19.75])
-yticks(linspace(0,18,4))
+ylim([-0.1,1.1]*max(mseScores))
+yticks(round(linspace(0,round(max(mseScores)),4)))
 
 box on; grid on;
 
@@ -428,26 +437,51 @@ uniformSSIM = ssimScores;
 uniformMSE = mseScores;
 %% More complex: consider all combinations of images, not just linspace
 
+% set flags
+normalize = true;
+computeSSIM = false; % skipping this will make computations faster, MSE and SSIM have similar trends
+computeMSE = true;
+computeDynRanges = false; % not that informative
+
 % Generate combinations with 2 to 15 images
 nImgs = 1:15;
 imgIdxs = cell(numel(nImgs),1);
 for i = 1:numel(imgIdxs)
     nImg = nImgs(i);
-    imgIdxs{i} = combnk(1:15, nImg); % n choose k
+    imgIdxs{i} = combnk(nImgs, nImg); % n choose k
     % disp(imgIdxs{i})
 end
 
 % compute HDR
 % too expensive to hold all in memory, compute ssim/mse and discard
 groundTruth = imgHDR(:,:,1);
+if(normalize)
+    max_ = max(groundTruth(:));
+    min_ = min(groundTruth(:));
+    groundTruth = 255.*(groundTruth - min_) ./ (max_ - min_);
+end
 
-ssimScores = cell(numel(nImgs),1);
-mseScores = cell(numel(nImgs),1);
+if(computeSSIM)
+    ssimScores = cell(numel(nImgs),1);
+end
+if(computeMSE)
+    mseScores = cell(numel(nImgs),1);
+end
+if(computeDynRanges)
+    dynamicRanges = cell(numel(nImgs),2);
+end
 reverseStr = ''; % for status updates
 for i = 1:numel(imgIdxs)
-    localssimScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
-    localmseScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
-    
+    if(computeSSIM)
+        localssimScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
+    end
+    if(computeMSE)
+        localmseScores = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
+    end
+    if(computeDynRanges)
+        localDynRangesMin = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
+        localDynRangesMax = zeros(size(imgIdxs{i},1),1); % prealloc for use in parfor
+    end
     subImgIdxs = imgIdxs{i};
     
     fprintf('Processing (%d choose %d) %d combinations', nImgs(end), nImgs(i), size(imgIdxs{i},1))
@@ -456,156 +490,199 @@ for i = 1:numel(imgIdxs)
         subStack = stack(:,:,:,idxs);
         subExposures = stack_exposure(idxs);
         thisHDR = BuildHDR(subStack, subExposures, 'LUT', lin_fun, 'Robertson', 'log', 1);
+        thisHDR = thisHDR(:,:,1);
+        
+        % keep track of the dynamic range
+        if(computeDynRanges)
+            localDynRangesMin(j) = min(thisHDR(:));
+            localDynRangesMax(j) = max(thisHDR(:));
+        end
+        
+        % normalize dynamic range using ground truth's min/max
+        if(normalize)
+            thisHDR = 255.*(thisHDR - min_) ./ (max_ - min_);
+        end
         
         % compute similarity
-        localssimScores(j) = ssim(thisHDR(:,:,1), groundTruth);
-        localmseScores(j) = immse(thisHDR(:,:,1), groundTruth);
+        if(computeSSIM)
+            localssimScores(j) = ssim(thisHDR, groundTruth);
+        end
+        if(computeMSE)
+            localmseScores(j) = immse(thisHDR, groundTruth);
+        end
+
     end
-    
-    ssimScores{i} = localssimScores;
-    mseScores{i} = localmseScores;
+
+    if(computeSSIM)
+        ssimScores{i} = localssimScores;
+    end
+    if(computeMSE)
+        mseScores{i} = localmseScores;
+    end
+    if(computeDynRanges)
+        dynamicRanges{i,1} = localDynRangesMin;
+        dynamicRanges{i,2} = localDynRangesMax;
+    end
     fprintf('...done.\n')
     reverseStr = '';
 end
 fprintf('\n')
 
-% save([workingDir,filesep,'ssimScores.mat'],'ssimScores')
-% save([workingDir,filesep,'mseScores.mat'],'mseScores')
+if(saveResults)
+    if(computeSSIM)
+        save([workingDir,filesep,'ssimScores.mat'],'ssimScores')
+    end
+    if(computeMSE)
+        save([workingDir,filesep,'mseScores.mat'],'mseScores')
+    end
+    if(computeDynRanges)
+        save([workingDir,filesep,'dynamicRanges.mat'],'dynamicRanges')
+    end
+end
 
-
+%%
+if(computeDynRanges)
+    dynRanges = cellfun(@(mins,maxs) maxs./mins, dynamicRanges(:,1), dynamicRanges(:,2), 'UniformOutput', false);
+    [maxDynRanges, argmaxDynRanges] = cellfun(@max, dynRanges, 'UniformOutput', false);
+    maxDynRanges = cell2mat(maxDynRanges);
+end
 %% Find the argmax of scores
-[maxSSIM, argmaxSSIM] = cellfun(@max, ssimScores, 'UniformOutput', false);
-[minSSIM, argminSSIM] = cellfun(@min, ssimScores, 'UniformOutput', false);
-[maxMSE, argminMSE] = cellfun(@max, mseScores, 'UniformOutput', false);
-[minMSE, argminMSE] = cellfun(@min, mseScores, 'UniformOutput', false);
-maxSSIM = cell2mat(maxSSIM);
-minSSIM = cell2mat(minSSIM);
-maxMSE = cell2mat(maxMSE);
-minMSE = cell2mat(minMSE);
+if(computeSSIM)
+    [maxSSIM, argmaxSSIM] = cellfun(@max, ssimScores, 'UniformOutput', false);
+    [minSSIM, argminSSIM] = cellfun(@min, ssimScores, 'UniformOutput', false);
+    maxSSIM = cell2mat(maxSSIM);
+    minSSIM = cell2mat(minSSIM);
+end
+if(computeMSE)
+    [maxMSE, argminMSE] = cellfun(@max, mseScores, 'UniformOutput', false);
+    [minMSE, argminMSE] = cellfun(@min, mseScores, 'UniformOutput', false);
+    maxMSE = cell2mat(maxMSE);
+    minMSE = cell2mat(minMSE);
+end
 
 % imgIdxs{3}(ssimScores{3} > 0.893,:)
 % imgIdxs{3}(mseScores{3} < 2.8,:)
 
 %% Plot max scores
-figure('units','normalized','position',[.25 .25 .3 .25])
-
-hold on
-
-ax = gca;
-
-yyaxis left
-semilogx(nImgs, maxSSIM, '-o', 'LineWidth', 2)
-semilogx(nImgs, minSSIM, '--x', 'LineWidth', 2)
-ylabel('SSIM')
-xlabel('Number of images')
-ylim([-0.1,1.1])
-xlim([nImgs(1)-0.1,nImgs(end)+1])
-xticks([1,5,10,15])
-yticks(linspace(0,1,5))
-
-yyaxis right
-semilogx(nImgs, minMSE, '-.+', 'LineWidth', 2)
-semilogx(nImgs, maxMSE, ':^', 'LineWidth', 2)
-ylabel('MSE')
-ax.YDir = 'reverse';
-ylim([-0.1*maxMSE(1),1.1*maxMSE(1)])
-yticks(linspace(0,round(maxMSE(1),1),5))
-
-box on; grid on;
-
-legend('SSIM max','SSIM min','MSE min','MSE max','Location','southeast')
-ax.LineWidth = 1;
-ax.FontName = 'Times New Roman';
-set(ax,'FontSize',16)
-
-if(saveResults)
-    % Save as PDF
-    set(gcf,'units','inch')
-    ppos = get(gcf, 'Position');
-    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
-    print([workingDir,filesep,'nImagesStudy.pdf'],'-dpdf')
+if(computeMSE && computeSSIM)
+    figure('units','normalized','position',[.25 .25 .3 .25])
     
-    % % If you have the export_fig package, this is easier to use
-    % export_fig([workingDir,filesep,'nImagesStudy'],'-pdf','-depsc');
+    hold on
+    
+    ax = gca;
+    
+    yyaxis left
+    semilogx(nImgs, maxSSIM, '-o', 'LineWidth', 2)
+    semilogx(nImgs, minSSIM, '--x', 'LineWidth', 2)
+    ylabel('SSIM')
+    xlabel('Number of images')
+    ylim([-0.1,1.1])
+    xlim([nImgs(1)-0.1,nImgs(end)+1])
+    xticks([1,5,10,15])
+    yticks(linspace(0,1,5))
+    
+    yyaxis right
+    semilogx(nImgs, minMSE, '-.+', 'LineWidth', 2)
+    semilogx(nImgs, maxMSE, ':^', 'LineWidth', 2)
+    ylabel('MSE')
+    ax.YDir = 'reverse';
+    ylim([-0.1*maxMSE(1),1.1*maxMSE(1)])
+    yticks(linspace(0,round(maxMSE(1),1),5))
+    
+    box on; grid on;
+    
+    legend('SSIM max','SSIM min','MSE min','MSE max','Location','southeast')
+    ax.LineWidth = 1;
+    ax.FontName = 'Times New Roman';
+    set(ax,'FontSize',16)
+    
+    if(saveResults)
+        % Save as PDF
+        set(gcf,'units','inch')
+        ppos = get(gcf, 'Position');
+        set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+        print([workingDir,filesep,'nImagesStudy.pdf'],'-dpdf')
+        
+        % % If you have the export_fig package, this is easier to use
+        % export_fig([workingDir,filesep,'nImagesStudy'],'-pdf','-depsc');
+    end
 end
-
 %% Only plot MSE
-figure('units','normalized','position',[.25 .25 .25 .25])
-
-pctg = 2:15;
-%pctg = pctg./0.15;
-
-ax = gca;
-
-plot(pctg, minMSE, '-+', 'LineWidth', 2, 'MarkerSize', 9)
-hold on
-plot(pctg, maxMSE, '-.^', 'LineWidth', 2, 'MarkerSize', 9)
-plot(pctg, uniformMSE(2:end), ':ok', 'LineWidth', 2, 'MarkerSize', 9)
-ylabel('MSE')
-xlabel('Number of images used')
-xlim([1.9,15.1])
-% xlabel('Percentage of available images')
-% xlim([0,101])
-ylim([-0.1*maxMSE(1),1.1*maxMSE(1)])
-xticks(round(linspace(2,15,4)))
-% yticks(round(linspace(0,round(maxMSE(1)),5)))
-yticks(0:10:40)
-
-box off
-
-legend('Best','Worst','Uniform','Location','northeast')
-ax.LineWidth = 1;
-ax.FontName = 'Times New Roman';
-set(ax,'FontSize',16)
-
-if(saveResults)
-    % Save as PDF
-    set(gcf,'units','inch')
-    ppos = get(gcf, 'Position');
-    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
-    print([workingDir,filesep,'nImagesStudy_MSE.pdf'],'-dpdf')
+if(computeMSE)
+    figure('units','normalized','position',[.25 .25 .3 .25])
     
-    % % If you have the export_fig package, this is easier to use
-    % export_fig([workingDir,filesep,'nImagesStudy_MSE'],'-pdf','-depsc');
+    nImgs = 2:15;
+    %pctg = pctg./0.15;
+    
+    ax = gca;
+    
+    plot(nImgs, minMSE(nImgs), '-+', 'LineWidth', 2, 'MarkerSize', 9)
+    hold on
+    plot(nImgs, maxMSE(nImgs), '-.^', 'LineWidth', 2, 'MarkerSize', 9)
+    plot(nImgs, uniformMSE(nImgs), ':ok', 'LineWidth', 2, 'MarkerSize', 9)
+    ylabel('MSE')
+    xlabel(sprintf('Number of images used out of %d', nImgs(end)))
+    xlim([nImgs(1)-0.2, nImgs(end)+0.1])
+    ylim([-0.1*maxMSE(nImgs(1)),1.1*maxMSE(nImgs(1))])
+    xticks(round(linspace(nImgs(1),nImgs(end),4)))
+    %yticks(round(linspace(0,round(maxMSE(nImgs(1))),5)))
+    yticks(linspace(0,100,5))
+    
+    box off
+    
+    legend('Best','Worst','Uniform','Location','northeast')
+    ax.LineWidth = 1;
+    ax.FontName = 'Times New Roman';
+    set(ax,'FontSize',16)
+    
+    if(saveResults)
+        % Save as PDF
+        set(gcf,'units','inch')
+        ppos = get(gcf, 'Position');
+        set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+        print([workingDir,filesep,'nImagesStudy_MSE.pdf'],'-dpdf')
+        
+        % % If you have the export_fig package, this is easier to use
+        % export_fig([workingDir,filesep,'nImagesStudy_MSE'],'-pdf','-depsc');
+    end
 end
-
 %% Only plot SSIM
-figure('units','normalized','position',[.25 .25 .25 .25])
-
-ax = gca;
-
-h1 = plot(pctg, maxSSIM, '-+', 'LineWidth', 2, 'MarkerSize', 9);
-hold on
-hline = refline([0,0.9]);
-hline.Color = 'k';
-hline.LineStyle = '--';
-h2 = plot(pctg, minSSIM, '-.^', 'LineWidth', 2, 'MarkerSize', 9);
-h3 = plot(pctg, uniformSSIM(2:end), ':ok', 'LineWidth', 2, 'MarkerSize', 9);
-
-xlabel('Number of images used')
-xlim([1.9,15.1])
-% xlim([pctg(1)-1,pctg(end)+1])
-% xlabel('Percentage of available images')
-ylabel('SSIM')
-ylim([-0.1, 1.1])
-xticks(round(linspace(2,15,4)))
-yticks(linspace(0,1,5))
-
-box off
-%box on; grid on;
-
-legend([h1,h2,h3],{'Best','Worst','Uniform'},'Location','southeast')
-ax.LineWidth = 1;
-ax.FontName = 'Times New Roman';
-set(ax,'FontSize',16)
-
-if(saveResults)
-    % Save as PDF
-    set(gcf,'units','inch')
-    ppos = get(gcf, 'Position');
-    set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
-    print([workingDir,filesep,'nImagesStudy_SSIM.pdf'],'-dpdf')
+if(computeSSIM)
+    figure('units','normalized','position',[.25 .25 .3 .25])
     
-    % % If you have the export_fig package, this is easier to use
-    % export_fig([workingDir,filesep,'nImagesStudy_SSIM'],'-pdf','-depsc');
+    ax = gca;
+    
+    h1 = plot(pctg, maxSSIM, '-+', 'LineWidth', 2, 'MarkerSize', 9);
+    hold on
+    hline = refline([0,0.9]);
+    hline.Color = 'k';
+    hline.LineStyle = '--';
+    h2 = plot(pctg, minSSIM, '-.^', 'LineWidth', 2, 'MarkerSize', 9);
+    h3 = plot(pctg, uniformSSIM, ':ok', 'LineWidth', 2, 'MarkerSize', 9);
+    
+    xlabel(sprintf('Number of images used out of %d', nImgs(end)))
+    xlim([1.9,15.1])
+    ylabel('SSIM')
+    ylim([-0.1, 1.1])
+    xticks(round(linspace(2,15,4)))
+    yticks(linspace(0,1,5))
+    
+    box off
+    %box on; grid on;
+    
+    legend([h1,h2,h3],{'Best','Worst','Uniform'},'Location','southeast')
+    ax.LineWidth = 1;
+    ax.FontName = 'Times New Roman';
+    set(ax,'FontSize',16)
+    
+    if(saveResults)
+        % Save as PDF
+        set(gcf,'units','inch')
+        ppos = get(gcf, 'Position');
+        set(gcf, 'PaperSize', [ppos(3) ppos(4)]);
+        print([workingDir,filesep,'nImagesStudy_SSIM.pdf'],'-dpdf')
+        
+        % % If you have the export_fig package, this is easier to use
+        % export_fig([workingDir,filesep,'nImagesStudy_SSIM'],'-pdf','-depsc');
+    end
 end
