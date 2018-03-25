@@ -2,7 +2,8 @@
 High Dynamic Range Ultrasound Imaging
 
 ### 1. Related Papers
-* **High Dynamic Range Ultrasound Imaging**, *A. Degirmenci, D.P. Perrin, and R.D. Howe,* Int J CARS (2018). https://doi.org/10.1007/s11548-018-1729-3
+* **High Dynamic Range Ultrasound Imaging**, *A. Degirmenci, D.P. Perrin, and R.D. Howe,* Int J CARS (2018). 
+https://link.springer.com/article/10.1007/s11548-018-1729-3
 
 ### 2. Installation
 Download the repo to your machine:
