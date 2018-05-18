@@ -1,9 +1,28 @@
 # HDR-US
-High Dynamic Range Ultrasound Imaging
+In this work, we apply HDR techniques to ultrasound imaging, where we combine ultrasound images acquired at different power levels to improve the level of detail visible in the ﬁnal image. Our results strongly suggest that HDR-US imaging can improve the utility of ultrasound in image-based diagnosis and procedure guidance.
 
 ### 1. Related Papers
 * **High Dynamic Range Ultrasound Imaging**, *A. Degirmenci, D.P. Perrin, and R.D. Howe,* Int J CARS (2018). 
 https://link.springer.com/article/10.1007/s11548-018-1729-3 (Free, view-only version: http://rdcu.be/JfOg)
+
+```
+@Article{Degirmenci2018,
+	author="Degirmenci, Alperen
+	and Perrin, Douglas P.
+	and Howe, Robert D.",
+	title="High dynamic range ultrasound imaging",
+	journal="International Journal of Computer Assisted Radiology and Surgery",
+	year="2018",
+	month="May",
+	day="01",
+	volume="13",
+	number="5",
+	pages="721--729",
+	issn="1861-6429",
+	doi="10.1007/s11548-018-1729-3",
+	url="https://doi.org/10.1007/s11548-018-1729-3"
+}
+```
 
 ### 2. Installation
 Download the repo to your machine:
