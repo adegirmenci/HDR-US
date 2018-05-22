@@ -56,5 +56,5 @@ To save results, set the flag
 
 ### 5 License
 HDR-US was developed at the Harvard Biorobotics Lab.
-The  licensed under the GNU General Public License
+Licensed under the GNU General Public License
 Version 3 (GPLv3).
