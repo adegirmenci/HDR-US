@@ -4,6 +4,7 @@ In this work, we apply HDR techniques to ultrasound imaging, where we combine ul
 ### 1. Related Papers
 * **High Dynamic Range Ultrasound Imaging**, *A. Degirmenci, D.P. Perrin, and R.D. Howe,* Int J CARS (2018). 
 https://link.springer.com/article/10.1007/s11548-018-1729-3 (Free, view-only version: http://rdcu.be/JfOg)
+**Recipient of the Best Paper Award at IPCAI 2018**
 
 ```
 @Article{Degirmenci2018,
