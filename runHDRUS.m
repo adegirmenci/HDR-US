@@ -151,13 +151,14 @@ title('HDR Image')
 
 disp('6) Show the tone mapped version of the radiance map with gamma encoding');
 
-nTMOs = 5;
+nTMOs = 6;
 
 hdrAdaptHist = tonemap_(imgHDR, 'AdjustLightness', [0.1 1.0], ...
                                   'AdjustSaturation', 0.6, ...
                                   'NumberOfTiles', [8,8]); % CLAHE
 hdrAdaptHist = ClampImg(hdrAdaptHist, 0, 1);
 
+hdrSimpleCompression = (imgHDR-min(imgHDR(:)))./(max(imgHDR(:)-min(imgHDR(:))));
 hdrReinhardGlobal = ReinhardTMO(double(imgHDR), 0, 0, 'global');
 hdrReinhardLocal = ReinhardTMO(double(imgHDR), 0, 0, 'local');
 hdrReinhardBilateral = ReinhardTMO(double(imgHDR), 0, 0, 'bilateral');
@@ -174,6 +175,7 @@ hdrDurand = DurandTMO(double(imgHDR),22);
 % Gamma correction
 hdrAdaptHist = GammaTMO(hdrAdaptHist, 1.0, 0.0, 0);
 gamma = 2.2;
+hdrSimpleCompression = GammaTMO(hdrSimpleCompression, gamma, 0.0, 0);
 hdrReinhardGlobal = GammaTMO(hdrReinhardGlobal, gamma, 0.0, 0);
 hdrReinhardLocal = GammaTMO(hdrReinhardLocal, gamma, 0.0, 0);
 hdrReinhardBilateral = GammaTMO(hdrReinhardBilateral, gamma, 0.0, 0);
@@ -181,6 +183,7 @@ hdrDurand = GammaTMO(hdrDurand, gamma, 0.0, 0);
 
 % Rescale
 hdrAdaptHist = rescale(hdrAdaptHist);
+hdrSimpleCompression = rescale(hdrSimpleCompression);
 hdrReinhardGlobal = rescale(hdrReinhardGlobal);
 hdrReinhardLocal = rescale(hdrReinhardLocal);
 hdrReinhardBilateral = rescale(hdrReinhardBilateral);
@@ -188,6 +191,7 @@ hdrDurand = rescale(hdrDurand);
 
 % Grayscale
 hdrAdaptHist = rgb2gray(hdrAdaptHist);
+hdrSimpleCompression = rgb2gray(hdrSimpleCompression);
 hdrReinhardGlobal = rgb2gray(hdrReinhardGlobal);
 hdrReinhardLocal = rgb2gray(hdrReinhardLocal);
 hdrReinhardBilateral = rgb2gray(hdrReinhardBilateral);
@@ -195,17 +199,19 @@ hdrDurand = rgb2gray(hdrDurand);
 
 %% Display Results
 
-figure('units','pixels','position',[200 200 size(imgHDR,2)*5 size(imgHDR,1)])
-subplot(1,5,1); imshow(hdrAdaptHist); title('Adaptive Hist Eq')
-subplot(1,5,2); imshow(hdrReinhardGlobal); title('Reinhard Global')
-subplot(1,5,3); imshow(hdrReinhardLocal); title('Reinhard Local')
-subplot(1,5,4); imshow(hdrReinhardBilateral); title('Reinhard Bilateral')
-subplot(1,5,5); imshow(hdrDurand); title('Durand')
+figure('units','pixels','position',[200 200 size(imgHDR,2)*6 size(imgHDR,1)])
+subplot(1,6,1); imshow(hdrAdaptHist); title('Adaptive Hist Eq')
+subplot(1,6,2); imshow(hdrSimpleCompression); title('Simple Compression')
+subplot(1,6,3); imshow(hdrReinhardGlobal); title('Reinhard Global')
+subplot(1,6,4); imshow(hdrReinhardLocal); title('Reinhard Local')
+subplot(1,6,5); imshow(hdrReinhardBilateral); title('Reinhard Bilateral')
+subplot(1,6,6); imshow(hdrDurand); title('Durand')
 
 %% Save Results
 
 if(saveResults)
     imwrite(hdrAdaptHist, [workingDir,filesep,'hdrAdaptHist.png']);
+    imwrite(hdrSimpleCompression, [workingDir,filesep,'hdrSimpleCompression','.png']);
     imwrite(hdrReinhardGlobal, [workingDir,filesep,'hdrReinhard_global','.png']);
     imwrite(hdrReinhardLocal, [workingDir,filesep,'hdrReinhard_local','.png']);
     imwrite(hdrReinhardBilateral, [workingDir,filesep,'hdrReinhard_bilateral','.png']);
@@ -248,6 +254,7 @@ for k = 1:numXY
     
     % Crop each TMO
     hdrAdaptHistCrop = imcrop(hdrAdaptHist, roi_);
+    hdrSimpleCompressionCrop = imcrop(hdrSimpleCompression, roi_);
     hdrReinhardGlobalCrop = imcrop(hdrReinhardGlobal, roi_);
     hdrReinhardLocalCrop = imcrop(hdrReinhardLocal, roi_);
     hdrReinhardBilateralCrop = imcrop(hdrReinhardBilateral, roi_);
@@ -258,6 +265,7 @@ for k = 1:numXY
         refImage = imcrop(images(j).image, roi_);
         
         localPSNRscores(:,j) = [psnr(hdrAdaptHistCrop,refImage);
+                                psnr(hdrSimpleCompressionCrop, refImage);
                                 psnr(hdrReinhardGlobalCrop, refImage);
                                 psnr(hdrReinhardLocalCrop,refImage);
                                 psnr(hdrReinhardBilateralCrop,refImage);
@@ -284,14 +292,15 @@ powers = PowerdB';
 
 hdrImages = zeros(size(imgHDR,1), size(imgHDR,2), 5);
 hdrImages(:,:,1) =  hdrAdaptHist;
-hdrImages(:,:,2) =  hdrReinhardGlobal;
-hdrImages(:,:,3) =  hdrReinhardLocal;
-hdrImages(:,:,4) =  hdrReinhardBilateral;
-hdrImages(:,:,5) =  hdrDurand;
+hdrImages(:,:,2) =  hdrSimpleCompression;
+hdrImages(:,:,3) =  hdrReinhardGlobal;
+hdrImages(:,:,4) =  hdrReinhardLocal;
+hdrImages(:,:,5) =  hdrReinhardBilateral;
+hdrImages(:,:,6) =  hdrDurand;
 
 % Plot prep
 figure('units','pixels','position',[200 200 size(imgHDR,2)*5 size(imgHDR,1)])
-titles = {'Adaptive Hist Eq', 'Reinhard Global', 'Reinhard Local', 'Reinhard Bilateral', 'Durand'};
+titles = {'Adaptive Hist Eq', 'Simple Compress', 'Reinhard Global', 'Reinhard Local', 'Reinhard Bilateral', 'Durand'};
 
 % find arg max to get the reference image index that corresponds most with
 % that window
@@ -308,8 +317,8 @@ for i = 1:size(psnrScores,1)
     
     argMaxDB = arrayfun(@(x) powers(x),argMaxImage);
     
-    subplot(1,5,i);
-    [C,h] = contourf(Xlist, Ylist, fliplr(argMaxDB),powers,'LineWidth',0.01,'Color','k');%,'ShowText','on')
+    subplot(1,nTMOs,i);
+    [C,h] = contourf(Xlist, Ylist, fliplr(argMaxDB),powers,'LineStyle','none');%,'ShowText','on')
     title(titles{i})
 
     colormap(jet)
@@ -345,7 +354,7 @@ end
 plotHistogram(hdrDurand,...
               'HDR_Durand',...
               saveResults, workingDir);
-          
+return
 %% Study the effect of number of reference images on HDR quality
 
 % Don't need tone mapping
