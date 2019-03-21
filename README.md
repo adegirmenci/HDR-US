@@ -28,7 +28,7 @@ https://link.springer.com/article/10.1007/s11548-018-1729-3 (Free, view-only ver
 ### 2. Installation
 Download the repo to your machine:
 
-	git clone https://github.com/adegirmenci/HDR-US.git
+	git clone --recurse-submodules https://github.com/adegirmenci/HDR-US.git
 	
 From the root project directory, run the install script:
 
